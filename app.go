@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"fmt"
 	"log"
 	"math/rand"
@@ -24,6 +25,7 @@ func main() {
 
 	r := gin.Default()
 	r.POST("/register", register)
+	r.POST("/login", login)
 	r.Run()
 }
 
@@ -79,6 +81,64 @@ func register(c *gin.Context) {
 	})
 }
 
+func login(c *gin.Context) {
+	username := c.Request.FormValue("username")
+	password := c.Request.FormValue("password")
+
+	query := `
+	SELECT 
+		user_id,
+		username,
+		password,
+		salt,
+		created_at,
+		profile_pic
+	FROM
+		account
+	WHERE
+		username = $1
+	`
+
+	var user UserDB
+	err := db.Get(&user, query, username)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(400, StandardAPIResponse{
+				Err: "Not authorized",
+			})
+			return
+		}
+
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	password += user.Salt.String
+	h := sha256.New()
+	h.Write([]byte(password))
+	hashedPassword := fmt.Sprintf("%x", h.Sum(nil))
+
+	if user.Password.String != hashedPassword {
+		c.JSON(401, StandardAPIResponse{
+			Err: "password mismatch",
+		})
+		return
+	}
+
+	resp := User{
+		Username:   user.UserName.String,
+		ProfilePic: user.ProfilePic.String,
+		CreatedAt:  user.CreatedAt.UnixNano(),
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: resp,
+	})
+}
+
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func RandStringBytes(n int) string {
@@ -97,10 +157,17 @@ type StandardAPIResponse struct {
 
 type User struct {
 	Username   string `json:"username"`
-	Salt       string
-	Password   string
 	ProfilePic string `json:"profile_pic"`
 	CreatedAt  int64  `json:"created_at"`
+}
+
+type UserDB struct {
+	UserID     sql.NullInt64  `db:"user_id"`
+	UserName   sql.NullString `db:"username"`
+	ProfilePic sql.NullString `db:"profile_pic"`
+	Salt       sql.NullString `db:"salt"`
+	Password   sql.NullString `db:"password"`
+	CreatedAt  time.Time      `db:"created_at"`
 }
 
 type Room struct {
