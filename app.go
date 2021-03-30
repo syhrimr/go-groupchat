@@ -26,6 +26,11 @@ func main() {
 	r := gin.Default()
 	r.POST("/register", register)
 	r.POST("/login", login)
+	r.GET("/profile/:username", getProfile)
+	r.PUT("/profile", updateProfile)
+	r.PUT("/password", changePassword)
+	r.PUT("/room", joinRoom)
+	r.POST("/room", createRoom)
 	r.Run()
 }
 
@@ -139,6 +144,226 @@ func login(c *gin.Context) {
 	})
 }
 
+func getProfile(c *gin.Context) {
+	query := `
+	SELECT 
+		user_id,
+		username,
+		password,
+		salt,
+		created_at,
+		profile_pic
+	FROM
+		account
+	WHERE
+		username = $1
+	`
+
+	username := c.Param("username")
+
+	var user UserDB
+	err := db.Get(&user, query, username)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(404, StandardAPIResponse{
+				Err: "Not found!",
+			})
+			return
+		}
+
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	resp := User{
+		Username:   user.UserName.String,
+		ProfilePic: user.ProfilePic.String,
+		CreatedAt:  user.CreatedAt.UnixNano(),
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: resp,
+	})
+}
+
+func updateProfile(c *gin.Context) {
+	username := c.Request.FormValue("username")
+	profilepic := c.Request.FormValue("imageURL")
+
+	query := `
+		UPDATE
+			account
+		SET 
+		    profile_pic = $1
+		WHERE
+			username = $2
+	`
+
+	_, err := db.Exec(query, profilepic, username)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(201, StandardAPIResponse{
+		Err:     "null",
+		Message: "Success update profile picture",
+	})
+
+}
+
+func changePassword(c *gin.Context) {
+	username := c.Request.FormValue("username")
+	oldpass := c.Request.FormValue("old_password")
+	newpass := c.Request.FormValue("new_password")
+
+	query := `
+	SELECT 
+		password,
+	    salt
+	FROM
+		account
+	WHERE
+		username = $1
+	`
+
+	var user UserDB
+	err := db.Get(&user, query, username)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(400, StandardAPIResponse{
+				Err: "Not authorized",
+			})
+			return
+		}
+
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	oldpass += user.Salt.String
+	h := sha256.New()
+	h.Write([]byte(oldpass))
+	hashedOldPassword := fmt.Sprintf("%x", h.Sum(nil))
+
+	if user.Password.String != hashedOldPassword {
+		c.JSON(401, StandardAPIResponse{
+			Err: "old password is wrong!",
+		})
+		return
+	}
+
+	//new pass
+	salt := RandStringBytes(32)
+	newpass += salt
+
+	h = sha256.New()
+	h.Write([]byte(newpass))
+	hashedNewPass := fmt.Sprintf("%x", h.Sum(nil))
+
+	query = `
+		UPDATE
+			account
+		SET 
+		    password = $1
+		WHERE
+			username = $2
+	`
+
+	_, err = db.Exec(query, hashedNewPass, username)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(201, StandardAPIResponse{
+		Err:     "null",
+		Message: "Success update password",
+	})
+
+}
+
+func createRoom(c *gin.Context) {
+	name := c.Request.FormValue("name")
+	desc := c.Request.FormValue("desc")
+	categoryId := c.Request.FormValue("category_id")
+	adminId := c.Request.FormValue("admin_id")
+
+	query := `
+		INSERT INTO
+			room
+		(
+			name,
+			admin_user_id,
+			description,
+			category_id,
+			created_at
+		)
+		VALUES
+		(
+			$1,
+			$2,
+			$3,
+			$4,
+			$5
+		)
+	`
+
+	_, err := db.Exec(query, name, adminId, desc, categoryId, time.Now())
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(201, StandardAPIResponse{
+		Err:     "null",
+		Message: "Success create new room",
+	})
+}
+
+func joinRoom(c *gin.Context) {
+	roomID := c.Request.FormValue("room_id")
+	userID := c.Request.FormValue("user_id")
+
+	query := `
+		INSERT INTO
+			room_participant
+		(
+			room_id,
+			user_id
+		)
+		VALUES
+		(
+			$1,
+			$2
+		)
+	`
+
+	_, err := db.Exec(query, roomID, userID)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(201, StandardAPIResponse{
+		Err:     "null",
+		Message: "Success join to room with ID "+roomID,
+	})
+}
+
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func RandStringBytes(n int) string {
@@ -170,6 +395,19 @@ type UserDB struct {
 	CreatedAt  time.Time      `db:"created_at"`
 }
 
+//TODO complete all API request
+type RoomDB struct {
+	RoomID      sql.NullInt64  `db:room_id`
+	Name        sql.NullString `db:name`
+	Admin       sql.NullInt64  `db:admin_user_id`
+	Description sql.NullString `db:description`
+	CategoryID  sql.NullInt64  `db:category_id`
+	CreatedAt   time.Time      `db:"created_at"`
+}
+
 type Room struct {
-	RoomID int64 `json:"room_id"`
+	RoomID      int64  `json:"room_id"`
+	Name        string `json:"name"`
+	Admin       int64  `json:"admin"`
+	Description string `json:"description"`
 }
