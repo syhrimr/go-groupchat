@@ -107,41 +107,19 @@ func login(c *gin.Context) {
 }
 
 func getProfile(c *gin.Context) {
-	query := `
-	SELECT 
-		user_id,
-		username,
-		password,
-		salt,
-		created_at,
-		profile_pic
-	FROM
-		account
-	WHERE
-		username = $1
-	`
-
 	username := c.Param("username")
 
-	var user UserDB
-	err := db.Get(&user, query, username)
+	user, err := dbResource.GetUserByUserName(username)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(404, StandardAPIResponse{
-				Err: "Not found!",
-			})
-			return
-		}
-
 		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
+			Err: "Unauthorized",
 		})
 		return
 	}
 
 	resp := User{
-		Username:   user.UserName.String,
-		ProfilePic: user.ProfilePic.String,
+		Username:   user.Username,
+		ProfilePic: user.ProfilePic,
 		CreatedAt:  user.CreatedAt.UnixNano(),
 	}
 
@@ -155,16 +133,7 @@ func updateProfile(c *gin.Context) {
 	username := c.Request.FormValue("username")
 	profilepic := c.Request.FormValue("imageURL")
 
-	query := `
-		UPDATE
-			account
-		SET 
-		    profile_pic = $1
-		WHERE
-			username = $2
-	`
-
-	_, err := db.Exec(query, profilepic, username)
+	err := dbResource.UpdateProfile(username, profilepic)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
@@ -184,38 +153,20 @@ func changePassword(c *gin.Context) {
 	oldpass := c.Request.FormValue("old_password")
 	newpass := c.Request.FormValue("new_password")
 
-	query := `
-	SELECT 
-		password,
-	    salt
-	FROM
-		account
-	WHERE
-		username = $1
-	`
-
-	var user UserDB
-	err := db.Get(&user, query, username)
+	user, err := dbResource.GetUserCredentialsByUsername(username)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(400, StandardAPIResponse{
-				Err: "Not authorized",
-			})
-			return
-		}
-
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
 		})
 		return
 	}
 
-	oldpass += user.Salt.String
+	oldpass += user.Salt
 	h := sha256.New()
 	h.Write([]byte(oldpass))
 	hashedOldPassword := fmt.Sprintf("%x", h.Sum(nil))
 
-	if user.Password.String != hashedOldPassword {
+	if user.Password != hashedOldPassword {
 		c.JSON(401, StandardAPIResponse{
 			Err: "old password is wrong!",
 		})
@@ -230,17 +181,9 @@ func changePassword(c *gin.Context) {
 	h.Write([]byte(newpass))
 	hashedNewPass := fmt.Sprintf("%x", h.Sum(nil))
 
-	query = `
-		UPDATE
-			account
-		SET 
-		    password = $1
-		WHERE
-			username = $2
-	`
+	err2 := dbResource.UpdateUserPassword(username, hashedNewPass)
 
-	_, err = db.Exec(query, hashedNewPass, username)
-	if err != nil {
+	if err2 != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
 		})
@@ -260,27 +203,8 @@ func createRoom(c *gin.Context) {
 	categoryId := c.Request.FormValue("category_id")
 	adminId := c.Request.FormValue("admin_id")
 
-	query := `
-		INSERT INTO
-			room
-		(
-			name,
-			admin_user_id,
-			description,
-			category_id,
-			created_at
-		)
-		VALUES
-		(
-			$1,
-			$2,
-			$3,
-			$4,
-			$5
-		)
-	`
+	err := dbResource.CreateRoom(name, adminId, desc, categoryId)
 
-	_, err := db.Exec(query, name, adminId, desc, categoryId, time.Now())
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
@@ -298,21 +222,8 @@ func joinRoom(c *gin.Context) {
 	roomID := c.Request.FormValue("room_id")
 	userID := c.Request.FormValue("user_id")
 
-	query := `
-		INSERT INTO
-			room_participant
-		(
-			room_id,
-			user_id
-		)
-		VALUES
-		(
-			$1,
-			$2
-		)
-	`
+	err := dbResource.AddRoomParticipant(roomID, userID)
 
-	_, err := db.Exec(query, roomID, userID)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
