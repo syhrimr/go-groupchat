@@ -12,10 +12,12 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/lolmourne/go-groupchat/resource"
+	"github.com/lolmourne/go-groupchat/usecase/userauth"
 )
 
 var db *sqlx.DB
 var dbResource resource.DBItf
+var userAuthUsecase userauth.UsecaseItf
 
 func main() {
 	dbInit, err := sqlx.Connect("postgres", "host=34.101.216.10 user=skilvul password=skilvul123apa dbname=skilvul-groupchat sslmode=disable")
@@ -26,6 +28,8 @@ func main() {
 	dbRsc := resource.NewDBResource(dbInit)
 	dbResource = dbRsc
 	db = dbInit
+
+	userAuthUsecase = userauth.NewUsecase(dbRsc)
 
 	r := gin.Default()
 	r.POST("/register", register)
@@ -43,23 +47,11 @@ func register(c *gin.Context) {
 	password := c.Request.FormValue("password")
 	confirmPassword := c.Request.FormValue("confirm_password")
 
-	if confirmPassword != password {
-		c.JSON(400, StandardAPIResponse{
-			Err: "Confirmed password is not matched",
-		})
-		return
-	}
-	salt := RandStringBytes(32)
-	password += salt
-
-	h := sha256.New()
-	h.Write([]byte(password))
-	password = fmt.Sprintf("%x", h.Sum(nil))
-
-	err := dbResource.Register(username, password, salt)
+	err := userAuthUsecase.Register(username, password, confirmPassword)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
-			Err: "Bad Request",
+			Err:     err.Error(),
+			Message: "Failed",
 		})
 		return
 	}
@@ -74,35 +66,17 @@ func login(c *gin.Context) {
 	username := c.Request.FormValue("username")
 	password := c.Request.FormValue("password")
 
-	user, err := dbResource.GetUserByUserName(username)
+	user, err := userAuthUsecase.Login(username, password)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
-			Err: "Unauthorized",
+			Err:     err.Error(),
+			Message: "Failed",
 		})
 		return
-	}
-
-	password += user.Salt
-	h := sha256.New()
-	h.Write([]byte(password))
-	hashedPassword := fmt.Sprintf("%x", h.Sum(nil))
-
-	if user.Password != hashedPassword {
-		c.JSON(401, StandardAPIResponse{
-			Err: "password mismatch",
-		})
-		return
-	}
-
-	resp := User{
-		Username:   user.Username,
-		ProfilePic: user.ProfilePic,
-		CreatedAt:  user.CreatedAt.UnixNano(),
 	}
 
 	c.JSON(200, StandardAPIResponse{
-		Err:  "null",
-		Data: resp,
+		Data: user,
 	})
 }
 
@@ -153,7 +127,7 @@ func changePassword(c *gin.Context) {
 	oldpass := c.Request.FormValue("old_password")
 	newpass := c.Request.FormValue("new_password")
 
-	user, err := dbResource.GetUserCredentialsByUsername(username)
+	user, err := dbResource.GetUserByUserName(username)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),

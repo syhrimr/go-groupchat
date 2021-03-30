@@ -16,7 +16,6 @@ type DBItf interface {
 	GetUserByUserID(userID int64) (model.User, error)
 	GetUserByUserName(userName string) (model.User, error)
 	UpdateProfile(userName string, profilePic string) error
-	GetUserCredentialsByUsername(userName string) (model.User, error)
 	UpdateUserPassword(userName string, password string) error
 	CreateRoom(roomName string, adminID string, description string, categoryID string) error
 	AddRoomParticipant(roomID string, userID string) error
@@ -110,31 +109,6 @@ func (dbr *DBResource) UpdateProfile(userName string, profilePic string) error {
 	}
 
 	return nil
-}
-
-func (dbr *DBResource) GetUserCredentialsByUsername(userName string) (model.User, error) {
-	query := `
-	SELECT 
-		password,
-	    salt
-	FROM
-		account
-	WHERE
-		username = $1
-	`
-	var user UserDB
-	err := dbr.db.Get(&user, query, userName)
-	if err != nil {
-		return model.User{}, err
-	}
-	return model.User{
-		UserID:     user.UserID.Int64,
-		Username:   user.UserName.String,
-		Password:   user.Password.String,
-		Salt:       user.Salt.String,
-		CreatedAt:  user.CreatedAt,
-		ProfilePic: user.ProfilePic.String,
-	}, nil
 }
 
 func (dbr *DBResource) UpdateUserPassword(userName string, password string) error {
