@@ -11,9 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/lolmourne/go-groupchat/resource"
 )
 
 var db *sqlx.DB
+var dbResource resource.DBItf
 
 func main() {
 	dbInit, err := sqlx.Connect("postgres", "host=34.101.216.10 user=skilvul password=skilvul123apa dbname=skilvul-groupchat sslmode=disable")
@@ -21,6 +23,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	dbRsc := resource.NewDBResource(dbInit)
+	dbResource = dbRsc
 	db = dbInit
 
 	r := gin.Default()
@@ -52,30 +56,10 @@ func register(c *gin.Context) {
 	h.Write([]byte(password))
 	password = fmt.Sprintf("%x", h.Sum(nil))
 
-	query := `
-		INSERT INTO
-			account
-		(
-			username,
-			password,
-			salt,
-			created_at,
-			profile_pic
-		)
-		VALUES
-		(
-			$1,
-			$2,
-			$3,
-			$4,
-			$5
-		)
-	`
-
-	_, err := db.Exec(query, username, password, salt, time.Now(), "")
+	err := dbResource.Register(username, password, salt)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
+			Err: "Bad Request",
 		})
 		return
 	}
@@ -90,42 +74,20 @@ func login(c *gin.Context) {
 	username := c.Request.FormValue("username")
 	password := c.Request.FormValue("password")
 
-	query := `
-	SELECT 
-		user_id,
-		username,
-		password,
-		salt,
-		created_at,
-		profile_pic
-	FROM
-		account
-	WHERE
-		username = $1
-	`
-
-	var user UserDB
-	err := db.Get(&user, query, username)
+	user, err := dbResource.GetUserByUserName(username)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(400, StandardAPIResponse{
-				Err: "Not authorized",
-			})
-			return
-		}
-
 		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
+			Err: "Unauthorized",
 		})
 		return
 	}
 
-	password += user.Salt.String
+	password += user.Salt
 	h := sha256.New()
 	h.Write([]byte(password))
 	hashedPassword := fmt.Sprintf("%x", h.Sum(nil))
 
-	if user.Password.String != hashedPassword {
+	if user.Password != hashedPassword {
 		c.JSON(401, StandardAPIResponse{
 			Err: "password mismatch",
 		})
@@ -133,8 +95,8 @@ func login(c *gin.Context) {
 	}
 
 	resp := User{
-		Username:   user.UserName.String,
-		ProfilePic: user.ProfilePic.String,
+		Username:   user.Username,
+		ProfilePic: user.ProfilePic,
 		CreatedAt:  user.CreatedAt.UnixNano(),
 	}
 
@@ -360,7 +322,7 @@ func joinRoom(c *gin.Context) {
 
 	c.JSON(201, StandardAPIResponse{
 		Err:     "null",
-		Message: "Success join to room with ID "+roomID,
+		Message: "Success join to room with ID " + roomID,
 	})
 }
 
