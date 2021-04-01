@@ -1,4 +1,4 @@
-package resource
+package acc
 
 import (
 	"database/sql"

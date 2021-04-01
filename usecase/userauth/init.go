@@ -1,11 +1,11 @@
 package userauth
 
 import (
-	"github.com/lolmourne/go-groupchat/resource"
+	"github.com/lolmourne/go-groupchat/resource/acc"
 )
 
 type Usecase struct {
-	dbRsc      resource.DBItf
+	dbRsc      acc.DBItf
 	signingKey []byte
 }
 
@@ -15,7 +15,7 @@ type UsecaseItf interface {
 	ValidateSession(accessToken string) (int64, error)
 }
 
-func NewUsecase(dbRsc resource.DBItf, signingKey string) UsecaseItf {
+func NewUsecase(dbRsc acc.DBItf, signingKey string) UsecaseItf {
 	return &Usecase{
 		dbRsc:      dbRsc,
 		signingKey: []byte(signingKey),

@@ -1,31 +1,10 @@
-package resource
+package acc
 
 import (
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/lolmourne/go-groupchat/model"
 )
-
-type DBResource struct {
-	db *sqlx.DB
-}
-
-type DBItf interface {
-	Register(username string, password string, salt string) error
-	GetUserByUserID(userID int64) (model.User, error)
-	GetUserByUserName(userName string) (model.User, error)
-	UpdateProfile(userID int64, profilePic string) error
-	UpdateUserPassword(userID int64, password string) error
-	CreateRoom(roomName string, adminID string, description string, categoryID string) error
-	AddRoomParticipant(roomID string, userID string) error
-}
-
-func NewDBResource(dbParam *sqlx.DB) DBItf {
-	return &DBResource{
-		db: dbParam,
-	}
-}
 
 func (dbr *DBResource) Register(username string, password string, salt string) error {
 	query := `

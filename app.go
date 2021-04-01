@@ -6,17 +6,19 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/lolmourne/go-groupchat/resource"
+	"github.com/lolmourne/go-groupchat/resource/acc"
 	"github.com/lolmourne/go-groupchat/usecase/userauth"
 )
 
 var db *sqlx.DB
-var dbResource resource.DBItf
+var dbResource acc.DBItf
 var userAuthUsecase userauth.UsecaseItf
 
 func main() {
@@ -26,7 +28,15 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	dbRsc := resource.NewDBResource(dbInit)
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "34.101.216.10:6379",
+		Password: "skilvulredis", // no password set
+		DB:       0,              // use default DB
+	})
+
+	dbRsc := acc.NewDBResource(dbInit)
+	dbRsc = acc.NewRedisResource(rdb, dbRsc)
+
 	dbResource = dbRsc
 	db = dbInit
 
@@ -35,6 +45,7 @@ func main() {
 	r := gin.Default()
 	r.POST("/register", register)
 	r.POST("/login", login)
+	r.GET("/usr/:user_id", getUser)
 	r.GET("/profile/:username", getProfile)
 	r.PUT("/profile", validateSession(updateProfile))
 	r.PUT("/password", validateSession(changePassword))
@@ -102,6 +113,35 @@ func login(c *gin.Context) {
 
 	c.JSON(200, StandardAPIResponse{
 		Data: user,
+	})
+}
+
+func getUser(c *gin.Context) {
+	uid := c.Param("user_id")
+
+	userID, err := strconv.ParseInt(uid, 10, 64)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	user, err := dbResource.GetUserByUserID(userID)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	resp := User{
+		Username:   user.Username,
+		ProfilePic: user.ProfilePic,
+		CreatedAt:  user.CreatedAt.UnixNano(),
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: resp,
 	})
 }
 
