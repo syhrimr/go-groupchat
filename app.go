@@ -49,8 +49,11 @@ func main() {
 	r.GET("/profile/:username", getProfile)
 	r.PUT("/profile", validateSession(updateProfile))
 	r.PUT("/password", validateSession(changePassword))
+
+	// untuk PR
 	r.PUT("/room", joinRoom)
 	r.POST("/room", createRoom)
+	// r.Get("/joined", getJoinedRoom)
 	r.Run()
 }
 
