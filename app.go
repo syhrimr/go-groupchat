@@ -20,6 +20,7 @@ var dbResource resource.DBItf
 var userAuthUsecase userauth.UsecaseItf
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	dbInit, err := sqlx.Connect("postgres", "host=34.101.216.10 user=skilvul password=skilvul123apa dbname=skilvul-groupchat sslmode=disable")
 	if err != nil {
 		log.Fatalln(err)
@@ -29,17 +30,41 @@ func main() {
 	dbResource = dbRsc
 	db = dbInit
 
-	userAuthUsecase = userauth.NewUsecase(dbRsc)
+	userAuthUsecase = userauth.NewUsecase(dbRsc, "signedK3y")
 
 	r := gin.Default()
 	r.POST("/register", register)
 	r.POST("/login", login)
 	r.GET("/profile/:username", getProfile)
-	r.PUT("/profile", updateProfile)
-	r.PUT("/password", changePassword)
+	r.PUT("/profile", validateSession(updateProfile))
+	r.PUT("/password", validateSession(changePassword))
 	r.PUT("/room", joinRoom)
 	r.POST("/room", createRoom)
 	r.Run()
+}
+
+func validateSession(handlerFunc gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		accessToken := c.Request.Header["X-Access-Token"]
+
+		if len(accessToken) < 1 {
+			c.JSON(403, StandardAPIResponse{
+				Err:     "No access token provided",
+				Message: "Forbidden",
+			})
+			return
+		}
+
+		userID, err := userAuthUsecase.ValidateSession(accessToken[0])
+		if err != nil {
+			c.JSON(400, StandardAPIResponse{
+				Err: err.Error(),
+			})
+			return
+		}
+		c.Set("uid", userID)
+		handlerFunc(c)
+	}
 }
 
 func register(c *gin.Context) {
@@ -104,10 +129,16 @@ func getProfile(c *gin.Context) {
 }
 
 func updateProfile(c *gin.Context) {
-	username := c.Request.FormValue("username")
-	profilepic := c.Request.FormValue("imageURL")
+	userID := c.GetInt64("uid")
+	if userID < 1 {
+		c.JSON(400, StandardAPIResponse{
+			Err: "no user founds",
+		})
+		return
+	}
 
-	err := dbResource.UpdateProfile(username, profilepic)
+	profilepic := c.Request.FormValue("profile_pic")
+	err := dbResource.UpdateProfile(userID, profilepic)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
@@ -123,11 +154,12 @@ func updateProfile(c *gin.Context) {
 }
 
 func changePassword(c *gin.Context) {
-	username := c.Request.FormValue("username")
+	userID := c.GetInt64("uid")
+
 	oldpass := c.Request.FormValue("old_password")
 	newpass := c.Request.FormValue("new_password")
 
-	user, err := dbResource.GetUserByUserName(username)
+	user, err := dbResource.GetUserByUserID(userID)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
@@ -155,7 +187,7 @@ func changePassword(c *gin.Context) {
 	h.Write([]byte(newpass))
 	hashedNewPass := fmt.Sprintf("%x", h.Sum(nil))
 
-	err2 := dbResource.UpdateUserPassword(username, hashedNewPass)
+	err2 := dbResource.UpdateUserPassword(userID, hashedNewPass)
 
 	if err2 != nil {
 		c.JSON(400, StandardAPIResponse{

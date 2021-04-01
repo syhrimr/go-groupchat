@@ -4,9 +4,10 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 
-	"github.com/lolmourne/go-groupchat/model"
+	jwt "github.com/dgrijalva/jwt-go"
 )
 
 func (u *Usecase) Register(username, password, confirmPassword string) error {
@@ -29,10 +30,10 @@ func (u *Usecase) Register(username, password, confirmPassword string) error {
 	return nil
 }
 
-func (u *Usecase) Login(username, password string) (*model.User, error) {
+func (u *Usecase) Login(username, password string) (string, error) {
 	user, err := u.dbRsc.GetUserByUserName(username)
 	if err != nil {
-		return nil, errors.New("user not found or password is incorrect")
+		return "", errors.New("user not found or password is incorrect")
 	}
 
 	password += user.Salt
@@ -41,13 +42,40 @@ func (u *Usecase) Login(username, password string) (*model.User, error) {
 	hashedPassword := fmt.Sprintf("%x", h.Sum(nil))
 
 	if user.Password != hashedPassword {
-		return nil, errors.New("user not found or password is incorrect")
+		return "", errors.New("user not found or password is incorrect")
 	}
 
 	user.Password = ""
 	user.Salt = ""
 
-	return &user, nil
+	token := jwt.New(jwt.GetSigningMethod("HS256"))
+	tokenClaim := jwt.MapClaims{}
+	tokenClaim["user"] = user.UserID
+	token.Claims = tokenClaim
+
+	tokenString, err := token.SignedString(u.signingKey)
+	if err != nil {
+		log.Println(err)
+		return "", errors.New("Internal Server Error")
+	}
+	return tokenString, nil
+}
+
+func (u *Usecase) ValidateSession(accessToken string) (int64, error) {
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(accessToken, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return u.signingKey, nil
+	})
+
+	if err != nil {
+		return 0, errors.New("Invalid Token")
+	}
+
+	userID := int64(claims["user"].(float64))
+	return userID, nil
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

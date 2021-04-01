@@ -15,8 +15,8 @@ type DBItf interface {
 	Register(username string, password string, salt string) error
 	GetUserByUserID(userID int64) (model.User, error)
 	GetUserByUserName(userName string) (model.User, error)
-	UpdateProfile(userName string, profilePic string) error
-	UpdateUserPassword(userName string, password string) error
+	UpdateProfile(userID int64, profilePic string) error
+	UpdateUserPassword(userID int64, password string) error
 	CreateRoom(roomName string, adminID string, description string, categoryID string) error
 	AddRoomParticipant(roomID string, userID string) error
 }
@@ -57,8 +57,34 @@ func (dbr *DBResource) Register(username string, password string, salt string) e
 }
 
 func (dbr *DBResource) GetUserByUserID(userID int64) (model.User, error) {
+	query := `
+	SELECT 
+		user_id,
+		username,
+		password,
+		salt,
+		created_at,
+		profile_pic
+	FROM
+		account
+	WHERE
+		user_id = $1
+	`
 
-	return model.User{}, nil
+	var user UserDB
+	err := dbr.db.Get(&user, query, userID)
+	if err != nil {
+		return model.User{}, nil
+	}
+
+	return model.User{
+		UserID:     user.UserID.Int64,
+		Username:   user.UserName.String,
+		Password:   user.Password.String,
+		Salt:       user.Salt.String,
+		CreatedAt:  user.CreatedAt,
+		ProfilePic: user.ProfilePic.String,
+	}, nil
 }
 
 func (dbr *DBResource) GetUserByUserName(userName string) (model.User, error) {
@@ -93,17 +119,17 @@ func (dbr *DBResource) GetUserByUserName(userName string) (model.User, error) {
 }
 
 //try
-func (dbr *DBResource) UpdateProfile(userName string, profilePic string) error {
+func (dbr *DBResource) UpdateProfile(userID int64, profilePic string) error {
 	query := `
 		UPDATE
 			account
 		SET 
 		    profile_pic = $1
 		WHERE
-			username = $2
+			user_id = $2
 	`
 
-	_, err := dbr.db.Exec(query, profilePic, userName)
+	_, err := dbr.db.Exec(query, profilePic, userID)
 	if err != nil {
 		return err
 	}
@@ -111,17 +137,17 @@ func (dbr *DBResource) UpdateProfile(userName string, profilePic string) error {
 	return nil
 }
 
-func (dbr *DBResource) UpdateUserPassword(userName string, password string) error {
+func (dbr *DBResource) UpdateUserPassword(userID int64, password string) error {
 	query := `
 		UPDATE
 			account
 		SET 
 		    password = $1
 		WHERE
-			username = $2
+			user_id = $2
 	`
 
-	_, err := dbr.db.Exec(query, password, userName)
+	_, err := dbr.db.Exec(query, password, userID)
 	if err != nil {
 		return err
 	}
