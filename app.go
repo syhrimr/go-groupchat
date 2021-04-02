@@ -268,8 +268,15 @@ func createRoom(c *gin.Context) {
 }
 
 func joinRoom(c *gin.Context) {
+	userID := c.GetInt64("uid")
+	if userID < 1 {
+		c.JSON(400, StandardAPIResponse{
+			Err: "no user founds",
+		})
+		return
+	}
+
 	roomID := c.Request.FormValue("room_id")
-	userID := c.Request.FormValue("user_id")
 
 	err := dbResource.AddRoomParticipant(roomID, userID)
 
