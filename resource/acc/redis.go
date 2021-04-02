@@ -50,10 +50,3 @@ func (dbr *RedisResource) UpdateUserPassword(userID int64, password string) erro
 	return dbr.next.UpdateUserPassword(userID, password)
 }
 
-func (dbr *RedisResource) CreateRoom(roomName string, adminID string, description string, categoryID string) error {
-	return dbr.next.CreateRoom(roomName, adminID, description, categoryID)
-}
-
-func (dbr *RedisResource) AddRoomParticipant(roomID string, userID string) error {
-	return dbr.next.AddRoomParticipant(roomID, userID)
-}

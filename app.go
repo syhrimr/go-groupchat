@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"github.com/lolmourne/go-groupchat/resource/groupchat"
+	groupchat2 "github.com/lolmourne/go-groupchat/usecase/groupchat"
 	"log"
 	"math/rand"
 	"strconv"
@@ -19,7 +21,9 @@ import (
 
 var db *sqlx.DB
 var dbResource acc.DBItf
+var dbRoomResource groupchat.DBItf
 var userAuthUsecase userauth.UsecaseItf
+var groupChatUsecase groupchat2.UsecaseItf
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -37,10 +41,14 @@ func main() {
 	dbRsc := acc.NewDBResource(dbInit)
 	dbRsc = acc.NewRedisResource(rdb, dbRsc)
 
+	dbRoomRsc := groupchat.NewRedisResource(rdb, groupchat.NewDBResource(dbInit))
+
 	dbResource = dbRsc
+	dbRoomResource = dbRoomRsc
 	db = dbInit
 
 	userAuthUsecase = userauth.NewUsecase(dbRsc, "signedK3y")
+	groupChatUsecase = groupchat2.NewUseCase(dbRoomRsc, "signedK3y")
 
 	r := gin.Default()
 	r.POST("/register", register)
@@ -51,9 +59,9 @@ func main() {
 	r.PUT("/password", validateSession(changePassword))
 
 	// untuk PR
-	r.PUT("/room", joinRoom)
-	r.POST("/room", createRoom)
-	// r.Get("/joined", getJoinedRoom)
+	r.PUT("/groupchat", validateSession(joinRoom))
+	r.POST("/groupchat", validateSession(createRoom))
+	r.GET("/joined", validateSession(getJoinedRoom))
 	r.Run()
 }
 
@@ -250,9 +258,11 @@ func createRoom(c *gin.Context) {
 	name := c.Request.FormValue("name")
 	desc := c.Request.FormValue("desc")
 	categoryId := c.Request.FormValue("category_id")
-	adminId := c.Request.FormValue("admin_id")
+	adminId := c.GetInt64("uid") //by default the one who create will be group admin
 
-	err := dbResource.CreateRoom(name, adminId, desc, categoryId)
+	adminStr := strconv.FormatInt(adminId, 10)
+
+	_,err:=groupChatUsecase.CreateGroupchat(name,adminStr,desc,categoryId)
 
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
@@ -263,7 +273,7 @@ func createRoom(c *gin.Context) {
 
 	c.JSON(201, StandardAPIResponse{
 		Err:     "null",
-		Message: "Success create new room",
+		Message: "Success create new groupchat",
 	})
 }
 
@@ -271,14 +281,21 @@ func joinRoom(c *gin.Context) {
 	userID := c.GetInt64("uid")
 	if userID < 1 {
 		c.JSON(400, StandardAPIResponse{
-			Err: "no user founds",
+			Err: "user not found",
 		})
 		return
 	}
 
-	roomID := c.Request.FormValue("room_id")
+	reqRoomID := c.Request.FormValue("room_id")
+	roomID,err := strconv.ParseInt(reqRoomID,10,64)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "wrong room id",
+		})
+		return
+	}
 
-	err := dbResource.AddRoomParticipant(roomID, userID)
+	err = groupChatUsecase.JoinRoom(roomID, userID)
 
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
@@ -289,7 +306,25 @@ func joinRoom(c *gin.Context) {
 
 	c.JSON(201, StandardAPIResponse{
 		Err:     "null",
-		Message: "Success join to room with ID " + roomID,
+		Message: "Success join to group chat with ID " + reqRoomID,
+	})
+}
+
+func getJoinedRoom(c *gin.Context)  {
+	userID := c.GetInt64("uid")
+	log.Println(userID)
+	rooms,err := dbRoomResource.GetJoinedRoom(userID)
+
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: rooms,
 	})
 }
 
