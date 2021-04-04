@@ -2,21 +2,19 @@ package main
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"fmt"
-	"github.com/lolmourne/go-groupchat/resource/groupchat"
-	groupchat2 "github.com/lolmourne/go-groupchat/usecase/groupchat"
-	"log"
-	"math/rand"
-	"strconv"
-	"time"
-
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/lolmourne/go-groupchat/resource/acc"
+	"github.com/lolmourne/go-groupchat/resource/groupchat"
+	groupchat2 "github.com/lolmourne/go-groupchat/usecase/groupchat"
 	"github.com/lolmourne/go-groupchat/usecase/userauth"
+	"log"
+	"math/rand"
+	"net/http"
+	"strconv"
 )
 
 var db *sqlx.DB
@@ -144,15 +142,19 @@ func getUser(c *gin.Context) {
 		return
 	}
 
-	resp := User{
-		Username:   user.Username,
-		ProfilePic: user.ProfilePic,
-		CreatedAt:  user.CreatedAt.UnixNano(),
+	if user.UserID == 0 {
+		c.JSON(http.StatusNotFound, StandardAPIResponse{
+			Err: "user not found",
+		})
+		return
 	}
+
+	user.Salt=""
+	user.Password=""
 
 	c.JSON(200, StandardAPIResponse{
 		Err:  "null",
-		Data: resp,
+		Data: user,
 	})
 }
 
@@ -167,15 +169,19 @@ func getProfile(c *gin.Context) {
 		return
 	}
 
-	resp := User{
-		Username:   user.Username,
-		ProfilePic: user.ProfilePic,
-		CreatedAt:  user.CreatedAt.UnixNano(),
+	if user.UserID == 0 {
+		c.JSON(http.StatusNotFound, StandardAPIResponse{
+			Err: "user not found",
+		})
+		return
 	}
+
+	user.Password=""
+	user.Salt=""
 
 	c.JSON(200, StandardAPIResponse{
 		Err:  "null",
-		Data: resp,
+		Data: user,
 	})
 }
 
@@ -312,7 +318,6 @@ func joinRoom(c *gin.Context) {
 
 func getJoinedRoom(c *gin.Context)  {
 	userID := c.GetInt64("uid")
-	log.Println(userID)
 	rooms,err := dbRoomResource.GetJoinedRoom(userID)
 
 	if err != nil {
@@ -342,36 +347,4 @@ type StandardAPIResponse struct {
 	Err     string      `json:"err"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data"`
-}
-
-type User struct {
-	Username   string `json:"username"`
-	ProfilePic string `json:"profile_pic"`
-	CreatedAt  int64  `json:"created_at"`
-}
-
-type UserDB struct {
-	UserID     sql.NullInt64  `db:"user_id"`
-	UserName   sql.NullString `db:"username"`
-	ProfilePic sql.NullString `db:"profile_pic"`
-	Salt       sql.NullString `db:"salt"`
-	Password   sql.NullString `db:"password"`
-	CreatedAt  time.Time      `db:"created_at"`
-}
-
-//TODO complete all API request
-type RoomDB struct {
-	RoomID      sql.NullInt64  `db:room_id`
-	Name        sql.NullString `db:name`
-	Admin       sql.NullInt64  `db:admin_user_id`
-	Description sql.NullString `db:description`
-	CategoryID  sql.NullInt64  `db:category_id`
-	CreatedAt   time.Time      `db:"created_at"`
-}
-
-type Room struct {
-	RoomID      int64  `json:"room_id"`
-	Name        string `json:"name"`
-	Admin       int64  `json:"admin"`
-	Description string `json:"description"`
 }
