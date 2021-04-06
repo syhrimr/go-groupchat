@@ -1,4 +1,4 @@
-package acc
+package groupchat
 
 import (
 	"github.com/go-redis/redis/v8"
@@ -16,12 +16,10 @@ type DBResource struct {
 }
 
 type DBItf interface {
-	Register(username string, password string, salt string) error
-	GetUserByUserID(userID int64) (model.User, error)
-	GetUserByUserName(userName string) (model.User, error)
-	UpdateProfile(userID int64, profilePic string) error
-	UpdateUserPassword(userID int64, password string) error
-
+	GetJoinedRoom(userID int64) ([]model.Room,error)
+	GetRoomByID(roomID int64) (model.Room,error)
+	CreateRoom(roomName string, adminID int64, description string, categoryID string) error
+	AddRoomParticipant(roomID, userID int64) error
 }
 
 func NewRedisResource(rdb *redis.Client, next DBItf) DBItf {
@@ -36,3 +34,4 @@ func NewDBResource(dbParam *sqlx.DB) DBItf {
 		db: dbParam,
 	}
 }
+

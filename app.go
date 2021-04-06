@@ -2,24 +2,26 @@ package main
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"fmt"
-	"log"
-	"math/rand"
-	"strconv"
-	"time"
-
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/lolmourne/go-groupchat/resource/acc"
+	"github.com/lolmourne/go-groupchat/resource/groupchat"
+	groupchat2 "github.com/lolmourne/go-groupchat/usecase/groupchat"
 	"github.com/lolmourne/go-groupchat/usecase/userauth"
+	"log"
+	"math/rand"
+	"net/http"
+	"strconv"
 )
 
 var db *sqlx.DB
 var dbResource acc.DBItf
+var dbRoomResource groupchat.DBItf
 var userAuthUsecase userauth.UsecaseItf
+var groupChatUsecase groupchat2.UsecaseItf
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -37,10 +39,14 @@ func main() {
 	dbRsc := acc.NewDBResource(dbInit)
 	dbRsc = acc.NewRedisResource(rdb, dbRsc)
 
+	dbRoomRsc := groupchat.NewRedisResource(rdb, groupchat.NewDBResource(dbInit))
+
 	dbResource = dbRsc
+	dbRoomResource = dbRoomRsc
 	db = dbInit
 
 	userAuthUsecase = userauth.NewUsecase(dbRsc, "signedK3y")
+	groupChatUsecase = groupchat2.NewUseCase(dbRoomRsc, "signedK3y")
 
 	r := gin.Default()
 	r.POST("/register", register)
@@ -51,9 +57,9 @@ func main() {
 	r.PUT("/password", validateSession(changePassword))
 
 	// untuk PR
-	r.PUT("/room", joinRoom)
-	r.POST("/room", createRoom)
-	// r.Get("/joined", getJoinedRoom)
+	r.PUT("/groupchat", validateSession(joinRoom))
+	r.POST("/groupchat", validateSession(createRoom))
+	r.GET("/joined", validateSession(getJoinedRoom))
 	r.Run()
 }
 
@@ -136,15 +142,19 @@ func getUser(c *gin.Context) {
 		return
 	}
 
-	resp := User{
-		Username:   user.Username,
-		ProfilePic: user.ProfilePic,
-		CreatedAt:  user.CreatedAt.UnixNano(),
+	if user.UserID == 0 {
+		c.JSON(http.StatusNotFound, StandardAPIResponse{
+			Err: "user not found",
+		})
+		return
 	}
+
+	user.Salt=""
+	user.Password=""
 
 	c.JSON(200, StandardAPIResponse{
 		Err:  "null",
-		Data: resp,
+		Data: user,
 	})
 }
 
@@ -159,15 +169,19 @@ func getProfile(c *gin.Context) {
 		return
 	}
 
-	resp := User{
-		Username:   user.Username,
-		ProfilePic: user.ProfilePic,
-		CreatedAt:  user.CreatedAt.UnixNano(),
+	if user.UserID == 0 {
+		c.JSON(http.StatusNotFound, StandardAPIResponse{
+			Err: "user not found",
+		})
+		return
 	}
+
+	user.Password=""
+	user.Salt=""
 
 	c.JSON(200, StandardAPIResponse{
 		Err:  "null",
-		Data: resp,
+		Data: user,
 	})
 }
 
@@ -250,9 +264,11 @@ func createRoom(c *gin.Context) {
 	name := c.Request.FormValue("name")
 	desc := c.Request.FormValue("desc")
 	categoryId := c.Request.FormValue("category_id")
-	adminId := c.Request.FormValue("admin_id")
+	adminId := c.GetInt64("uid") //by default the one who create will be group admin
 
-	err := dbResource.CreateRoom(name, adminId, desc, categoryId)
+	adminStr := strconv.FormatInt(adminId, 10)
+
+	_,err:=groupChatUsecase.CreateGroupchat(name,adminStr,desc,categoryId)
 
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
@@ -263,15 +279,29 @@ func createRoom(c *gin.Context) {
 
 	c.JSON(201, StandardAPIResponse{
 		Err:     "null",
-		Message: "Success create new room",
+		Message: "Success create new groupchat",
 	})
 }
 
 func joinRoom(c *gin.Context) {
-	roomID := c.Request.FormValue("room_id")
-	userID := c.Request.FormValue("user_id")
+	userID := c.GetInt64("uid")
+	if userID < 1 {
+		c.JSON(400, StandardAPIResponse{
+			Err: "user not found",
+		})
+		return
+	}
 
-	err := dbResource.AddRoomParticipant(roomID, userID)
+	reqRoomID := c.Request.FormValue("room_id")
+	roomID,err := strconv.ParseInt(reqRoomID,10,64)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "wrong room id",
+		})
+		return
+	}
+
+	err = groupChatUsecase.JoinRoom(roomID, userID)
 
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
@@ -282,7 +312,24 @@ func joinRoom(c *gin.Context) {
 
 	c.JSON(201, StandardAPIResponse{
 		Err:     "null",
-		Message: "Success join to room with ID " + roomID,
+		Message: "Success join to group chat with ID " + reqRoomID,
+	})
+}
+
+func getJoinedRoom(c *gin.Context)  {
+	userID := c.GetInt64("uid")
+	rooms,err := dbRoomResource.GetJoinedRoom(userID)
+
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: rooms,
 	})
 }
 
@@ -300,36 +347,4 @@ type StandardAPIResponse struct {
 	Err     string      `json:"err"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data"`
-}
-
-type User struct {
-	Username   string `json:"username"`
-	ProfilePic string `json:"profile_pic"`
-	CreatedAt  int64  `json:"created_at"`
-}
-
-type UserDB struct {
-	UserID     sql.NullInt64  `db:"user_id"`
-	UserName   sql.NullString `db:"username"`
-	ProfilePic sql.NullString `db:"profile_pic"`
-	Salt       sql.NullString `db:"salt"`
-	Password   sql.NullString `db:"password"`
-	CreatedAt  time.Time      `db:"created_at"`
-}
-
-//TODO complete all API request
-type RoomDB struct {
-	RoomID      sql.NullInt64  `db:room_id`
-	Name        sql.NullString `db:name`
-	Admin       sql.NullInt64  `db:admin_user_id`
-	Description sql.NullString `db:description`
-	CategoryID  sql.NullInt64  `db:category_id`
-	CreatedAt   time.Time      `db:"created_at"`
-}
-
-type Room struct {
-	RoomID      int64  `json:"room_id"`
-	Name        string `json:"name"`
-	Admin       int64  `json:"admin"`
-	Description string `json:"description"`
 }
