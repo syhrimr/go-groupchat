@@ -3,6 +3,12 @@ package main
 import (
 	"crypto/sha256"
 	"fmt"
+	"log"
+	"math/rand"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
@@ -11,10 +17,6 @@ import (
 	"github.com/lolmourne/go-groupchat/resource/groupchat"
 	groupchat2 "github.com/lolmourne/go-groupchat/usecase/groupchat"
 	"github.com/lolmourne/go-groupchat/usecase/userauth"
-	"log"
-	"math/rand"
-	"net/http"
-	"strconv"
 )
 
 var db *sqlx.DB
@@ -48,7 +50,15 @@ func main() {
 	userAuthUsecase = userauth.NewUsecase(dbRsc, "signedK3y")
 	groupChatUsecase = groupchat2.NewUseCase(dbRoomRsc, "signedK3y")
 
+	corsOpts := cors.Config{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"HEAD", "GET", "POST", "PUT", "PATCH", "DELETE"},
+		AllowCredentials: true,
+		AllowHeaders:     []string{"x-access-token"},
+	}
+	cors := cors.New(corsOpts)
 	r := gin.Default()
+	r.Use(cors)
 	r.POST("/register", register)
 	r.POST("/login", login)
 	r.GET("/usr/:user_id", getUser)
@@ -149,8 +159,8 @@ func getUser(c *gin.Context) {
 		return
 	}
 
-	user.Salt=""
-	user.Password=""
+	user.Salt = ""
+	user.Password = ""
 
 	c.JSON(200, StandardAPIResponse{
 		Err:  "null",
@@ -176,8 +186,8 @@ func getProfile(c *gin.Context) {
 		return
 	}
 
-	user.Password=""
-	user.Salt=""
+	user.Password = ""
+	user.Salt = ""
 
 	c.JSON(200, StandardAPIResponse{
 		Err:  "null",
@@ -268,7 +278,7 @@ func createRoom(c *gin.Context) {
 
 	adminStr := strconv.FormatInt(adminId, 10)
 
-	_,err:=groupChatUsecase.CreateGroupchat(name,adminStr,desc,categoryId)
+	_, err := groupChatUsecase.CreateGroupchat(name, adminStr, desc, categoryId)
 
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
@@ -293,7 +303,7 @@ func joinRoom(c *gin.Context) {
 	}
 
 	reqRoomID := c.Request.FormValue("room_id")
-	roomID,err := strconv.ParseInt(reqRoomID,10,64)
+	roomID, err := strconv.ParseInt(reqRoomID, 10, 64)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: "wrong room id",
@@ -316,9 +326,11 @@ func joinRoom(c *gin.Context) {
 	})
 }
 
-func getJoinedRoom(c *gin.Context)  {
+func getJoinedRoom(c *gin.Context) {
 	userID := c.GetInt64("uid")
-	rooms,err := dbRoomResource.GetJoinedRoom(userID)
+	log.Println(userID)
+	rooms, err := dbRoomResource.GetJoinedRoom(userID)
+	log.Println(rooms)
 
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{

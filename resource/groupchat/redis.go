@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lolmourne/go-groupchat/model"
 	"log"
 	"time"
+
+	"github.com/lolmourne/go-groupchat/model"
 )
 
-func (dbr *RedisResource) GetJoinedRoom(userID int64) ([]model.Room,error) {
+func (dbr *RedisResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
 	val, err := dbr.rdb.Get(context.Background(), fmt.Sprintf("roomJoined:%d", userID)).Result()
 	if err != nil {
 		rooms, err := dbr.next.GetJoinedRoom(userID)
@@ -42,7 +43,15 @@ func (dbr *RedisResource) CreateRoom(roomName string, adminID int64, description
 
 func (dbr *RedisResource) AddRoomParticipant(roomID, userID int64) error {
 	//no need redis since DML query (insert)
-	return dbr.next.AddRoomParticipant(roomID, userID)
+	err := dbr.next.AddRoomParticipant(roomID, userID)
+	if err == nil {
+		resp := dbr.rdb.Del(context.Background(), fmt.Sprintf("roomJoined:%d", userID))
+		if resp.Err() != nil {
+			return err
+		}
+	}
+
+	return err
 }
 
 func (dbr *RedisResource) GetRoomByID(roomID int64) (model.Room, error) {
