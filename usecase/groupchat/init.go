@@ -7,7 +7,6 @@ import (
 
 type UseCase struct {
 	dbRoomRsc groupchat.DBItf
-	signingKey []byte
 }
 
 type UsecaseItf interface {
@@ -16,10 +15,9 @@ type UsecaseItf interface {
 	JoinRoom(roomID, userID int64) error
 }
 
-func NewUseCase(dbRsc groupchat.DBItf, signingKey string) UsecaseItf {
+func NewUseCase(dbRsc groupchat.DBItf) UsecaseItf {
 	return UseCase{
 		dbRoomRsc: dbRsc,
-		signingKey: []byte(signingKey),
 	}
 
 }

@@ -1,23 +1,23 @@
 package userauth
 
 import (
-	"github.com/lolmourne/go-groupchat/resource/acc"
+	"time"
+
+	"github.com/lolmourne/go-groupchat/model"
 )
 
 type Usecase struct {
-	dbRsc      acc.DBItf
-	signingKey []byte
+	endpoint string
+	timeout  time.Duration
 }
 
 type UsecaseItf interface {
-	Register(username, password, confirmPassword string) error
-	Login(username, password string) (string, error)
-	ValidateSession(accessToken string) (int64, error)
+	GetUserInfo(accessToken string) *model.User
 }
 
-func NewUsecase(dbRsc acc.DBItf, signingKey string) UsecaseItf {
+func NewUsecase(endpoint string, timeout time.Duration) UsecaseItf {
 	return &Usecase{
-		dbRsc:      dbRsc,
-		signingKey: []byte(signingKey),
+		endpoint: endpoint,
+		timeout:  timeout,
 	}
 }

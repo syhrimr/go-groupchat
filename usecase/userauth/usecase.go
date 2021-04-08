@@ -1,89 +1,54 @@
 package userauth
 
 import (
-	"crypto/sha256"
-	"errors"
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
 	"log"
-	"math/rand"
+	"net/http"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/lolmourne/go-groupchat/model"
 )
 
-func (u *Usecase) Register(username, password, confirmPassword string) error {
-	if confirmPassword != password {
-		return errors.New("Confirm password is mismatched")
+func (u *Usecase) GetUserInfo(accessToken string) *model.User {
+	client := &http.Client{
+		Timeout: u.timeout,
 	}
 
-	salt := RandStringBytes(32)
-	password += salt
-
-	h := sha256.New()
-	h.Write([]byte(password))
-	password = fmt.Sprintf("%x", h.Sum(nil))
-
-	err := u.dbRsc.Register(username, password, salt)
+	req, err := http.NewRequest("GET", u.endpoint, nil)
 	if err != nil {
-		return err
+		return nil
 	}
+	req.Header.Set("X-Access-Token", accessToken)
 
-	return nil
-}
-
-func (u *Usecase) Login(username, password string) (string, error) {
-	user, err := u.dbRsc.GetUserByUserName(username)
+	respRaw, err := client.Do(req)
 	if err != nil {
-		return "", errors.New("user not found or password is incorrect")
+		return nil
 	}
-
-	password += user.Salt
-	h := sha256.New()
-	h.Write([]byte(password))
-	hashedPassword := fmt.Sprintf("%x", h.Sum(nil))
-
-	if user.Password != hashedPassword {
-		return "", errors.New("user not found or password is incorrect")
-	}
-
-	user.Password = ""
-	user.Salt = ""
-
-	token := jwt.New(jwt.GetSigningMethod("HS256"))
-	tokenClaim := jwt.MapClaims{}
-	tokenClaim["user"] = user.UserID
-	token.Claims = tokenClaim
-
-	tokenString, err := token.SignedString(u.signingKey)
-	if err != nil {
-		log.Println(err)
-		return "", errors.New("Internal Server Error")
-	}
-	return tokenString, nil
-}
-
-func (u *Usecase) ValidateSession(accessToken string) (int64, error) {
-	claims := jwt.MapClaims{}
-	_, err := jwt.ParseWithClaims(accessToken, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return u.signingKey, nil
-	})
+	defer respRaw.Body.Close()
 
 	if err != nil {
-		return 0, errors.New("Invalid Token")
+		return nil
 	}
 
-	userID := int64(claims["user"].(float64))
-	return userID, nil
-}
-
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	if respRaw.StatusCode != 200 {
+		return nil
 	}
-	return string(b)
+
+	respByte, err := ioutil.ReadAll(respRaw.Body)
+	if err != nil {
+		log.Print(err)
+		return nil
+	}
+
+	var resp struct {
+		Err  string     `json:"err"`
+		Data model.User `json:"data"`
+	}
+
+	err = json.Unmarshal(respByte, &resp)
+	if err != nil {
+		return nil
+	}
+
+	return &resp.Data
 }

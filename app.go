@@ -1,26 +1,22 @@
 package main
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"log"
 	"math/rand"
-	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/lolmourne/go-groupchat/resource/acc"
 	"github.com/lolmourne/go-groupchat/resource/groupchat"
 	groupchat2 "github.com/lolmourne/go-groupchat/usecase/groupchat"
 	"github.com/lolmourne/go-groupchat/usecase/userauth"
 )
 
 var db *sqlx.DB
-var dbResource acc.DBItf
 var dbRoomResource groupchat.DBItf
 var userAuthUsecase userauth.UsecaseItf
 var groupChatUsecase groupchat2.UsecaseItf
@@ -38,17 +34,13 @@ func main() {
 		DB:       0,              // use default DB
 	})
 
-	dbRsc := acc.NewDBResource(dbInit)
-	dbRsc = acc.NewRedisResource(rdb, dbRsc)
-
 	dbRoomRsc := groupchat.NewRedisResource(rdb, groupchat.NewDBResource(dbInit))
 
-	dbResource = dbRsc
 	dbRoomResource = dbRoomRsc
 	db = dbInit
 
-	userAuthUsecase = userauth.NewUsecase(dbRsc, "signedK3y")
-	groupChatUsecase = groupchat2.NewUseCase(dbRoomRsc, "signedK3y")
+	userAuthUsecase = userauth.NewUsecase("http://localhost:7070/user/info", time.Duration(30)*time.Second)
+	groupChatUsecase = groupchat2.NewUseCase(dbRoomRsc)
 
 	corsOpts := cors.Config{
 		AllowAllOrigins:  true,
@@ -59,12 +51,6 @@ func main() {
 	cors := cors.New(corsOpts)
 	r := gin.Default()
 	r.Use(cors)
-	r.POST("/register", register)
-	r.POST("/login", login)
-	r.GET("/usr/:user_id", getUser)
-	r.GET("/profile/:username", getProfile)
-	r.PUT("/profile", validateSession(updateProfile))
-	r.PUT("/password", validateSession(changePassword))
 
 	// untuk PR
 	r.PUT("/groupchat", validateSession(joinRoom))
@@ -85,189 +71,17 @@ func validateSession(handlerFunc gin.HandlerFunc) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := userAuthUsecase.ValidateSession(accessToken[0])
-		if err != nil {
-			c.JSON(400, StandardAPIResponse{
-				Err: err.Error(),
+		user := userAuthUsecase.GetUserInfo(accessToken[0])
+		if user == nil {
+			c.JSON(401, StandardAPIResponse{
+				Err: "Unauthorized",
 			})
 			return
 		}
-		c.Set("uid", userID)
+		c.Set("uid", user.UserID)
+		c.Set("user", user)
 		handlerFunc(c)
 	}
-}
-
-func register(c *gin.Context) {
-	username := c.Request.FormValue("username")
-	password := c.Request.FormValue("password")
-	confirmPassword := c.Request.FormValue("confirm_password")
-
-	err := userAuthUsecase.Register(username, password, confirmPassword)
-	if err != nil {
-		c.JSON(400, StandardAPIResponse{
-			Err:     err.Error(),
-			Message: "Failed",
-		})
-		return
-	}
-
-	c.JSON(201, StandardAPIResponse{
-		Err:     "null",
-		Message: "Success create new user",
-	})
-}
-
-func login(c *gin.Context) {
-	username := c.Request.FormValue("username")
-	password := c.Request.FormValue("password")
-
-	user, err := userAuthUsecase.Login(username, password)
-	if err != nil {
-		c.JSON(400, StandardAPIResponse{
-			Err:     err.Error(),
-			Message: "Failed",
-		})
-		return
-	}
-
-	c.JSON(200, StandardAPIResponse{
-		Data: user,
-	})
-}
-
-func getUser(c *gin.Context) {
-	uid := c.Param("user_id")
-
-	userID, err := strconv.ParseInt(uid, 10, 64)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	user, err := dbResource.GetUserByUserID(userID)
-	if err != nil {
-		c.JSON(400, StandardAPIResponse{
-			Err: "Unauthorized",
-		})
-		return
-	}
-
-	if user.UserID == 0 {
-		c.JSON(http.StatusNotFound, StandardAPIResponse{
-			Err: "user not found",
-		})
-		return
-	}
-
-	user.Salt = ""
-	user.Password = ""
-
-	c.JSON(200, StandardAPIResponse{
-		Err:  "null",
-		Data: user,
-	})
-}
-
-func getProfile(c *gin.Context) {
-	username := c.Param("username")
-
-	user, err := dbResource.GetUserByUserName(username)
-	if err != nil {
-		c.JSON(400, StandardAPIResponse{
-			Err: "Unauthorized",
-		})
-		return
-	}
-
-	if user.UserID == 0 {
-		c.JSON(http.StatusNotFound, StandardAPIResponse{
-			Err: "user not found",
-		})
-		return
-	}
-
-	user.Password = ""
-	user.Salt = ""
-
-	c.JSON(200, StandardAPIResponse{
-		Err:  "null",
-		Data: user,
-	})
-}
-
-func updateProfile(c *gin.Context) {
-	userID := c.GetInt64("uid")
-	if userID < 1 {
-		c.JSON(400, StandardAPIResponse{
-			Err: "no user founds",
-		})
-		return
-	}
-
-	profilepic := c.Request.FormValue("profile_pic")
-	err := dbResource.UpdateProfile(userID, profilepic)
-	if err != nil {
-		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(201, StandardAPIResponse{
-		Err:     "null",
-		Message: "Success update profile picture",
-	})
-
-}
-
-func changePassword(c *gin.Context) {
-	userID := c.GetInt64("uid")
-
-	oldpass := c.Request.FormValue("old_password")
-	newpass := c.Request.FormValue("new_password")
-
-	user, err := dbResource.GetUserByUserID(userID)
-	if err != nil {
-		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
-		})
-		return
-	}
-
-	oldpass += user.Salt
-	h := sha256.New()
-	h.Write([]byte(oldpass))
-	hashedOldPassword := fmt.Sprintf("%x", h.Sum(nil))
-
-	if user.Password != hashedOldPassword {
-		c.JSON(401, StandardAPIResponse{
-			Err: "old password is wrong!",
-		})
-		return
-	}
-
-	//new pass
-	salt := RandStringBytes(32)
-	newpass += salt
-
-	h = sha256.New()
-	h.Write([]byte(newpass))
-	hashedNewPass := fmt.Sprintf("%x", h.Sum(nil))
-
-	err2 := dbResource.UpdateUserPassword(userID, hashedNewPass)
-
-	if err2 != nil {
-		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(201, StandardAPIResponse{
-		Err:     "null",
-		Message: "Success update password",
-	})
-
 }
 
 func createRoom(c *gin.Context) {
