@@ -11,14 +11,19 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/lolmourne/go-accounts/client/userauth"
+	userAuth "github.com/lolmourne/go-accounts/client/userauth"
 	"github.com/lolmourne/go-groupchat/resource/groupchat"
 	groupchat2 "github.com/lolmourne/go-groupchat/usecase/groupchat"
-	"github.com/lolmourne/go-groupchat/usecase/userauth"
+	redisCli "github.com/lolmourne/r-pipeline/client"
+	"github.com/lolmourne/r-pipeline/pubsub"
+
+	redigo "github.com/gomodule/redigo/redis"
 )
 
 var db *sqlx.DB
 var dbRoomResource groupchat.DBItf
-var userAuthUsecase userauth.UsecaseItf
+var userClient userAuth.ClientItf
 var groupChatUsecase groupchat2.UsecaseItf
 
 func main() {
@@ -39,8 +44,16 @@ func main() {
 	dbRoomResource = dbRoomRsc
 	db = dbInit
 
-	userAuthUsecase = userauth.NewUsecase("http://localhost:7070/user/info", time.Duration(30)*time.Second)
+	userClient = userauth.NewClient("http://localhost:7070", time.Duration(30)*time.Second)
 	groupChatUsecase = groupchat2.NewUseCase(dbRoomRsc)
+
+	redisClient := redisCli.New(redisCli.SINGLE_MODE, "34.101.216.10:6379", 10,
+		redigo.DialReadTimeout(time.Duration(30)*time.Second),
+		redigo.DialWriteTimeout(time.Duration(30)*time.Second),
+		redigo.DialConnectTimeout(time.Duration(5)*time.Second),
+		redigo.DialPassword("skilvulredis"))
+	pubsub := pubsub.NewRedisPubsub(redisClient)
+	pubsub.Subscribe("testsub", readPubsub, true)
 
 	corsOpts := cors.Config{
 		AllowAllOrigins:  true,
@@ -56,7 +69,12 @@ func main() {
 	r.PUT("/groupchat", validateSession(joinRoom))
 	r.POST("/groupchat", validateSession(createRoom))
 	r.GET("/joined", validateSession(getJoinedRoom))
+	r.GET("/groupchat/:room_id", getGroupchat)
 	r.Run()
+}
+
+func readPubsub(msg string, err error) {
+	log.Println(msg)
 }
 
 func validateSession(handlerFunc gin.HandlerFunc) gin.HandlerFunc {
@@ -71,7 +89,7 @@ func validateSession(handlerFunc gin.HandlerFunc) gin.HandlerFunc {
 			return
 		}
 
-		user := userAuthUsecase.GetUserInfo(accessToken[0])
+		user := userClient.GetUserInfo(accessToken[0])
 		if user == nil {
 			c.JSON(401, StandardAPIResponse{
 				Err: "Unauthorized",
@@ -82,6 +100,30 @@ func validateSession(handlerFunc gin.HandlerFunc) gin.HandlerFunc {
 		c.Set("user", user)
 		handlerFunc(c)
 	}
+}
+
+func getGroupchat(c *gin.Context) {
+	roomIDStr := c.Param("room_id")
+
+	roomID, err := strconv.ParseInt(roomIDStr, 10, 64)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	room, err := groupChatUsecase.GetRoomByID(roomID)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Data: room,
+	})
 }
 
 func createRoom(c *gin.Context) {

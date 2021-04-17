@@ -1,9 +1,10 @@
 package groupchat
 
 import (
-	"github.com/lolmourne/go-groupchat/model"
 	"log"
 	"time"
+
+	"github.com/lolmourne/go-groupchat/model"
 )
 
 func (dbr *DBResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
@@ -71,9 +72,9 @@ func (dbr *DBResource) CreateRoom(roomName string, adminID int64, description st
 		return err
 	}
 
-	lastInsertID,err1:=res.LastInsertId()
+	lastInsertID, err1 := res.LastInsertId()
 
-	log.Println("RES value:",lastInsertID,err1)
+	log.Println("RES value:", lastInsertID, err1)
 	//TO ASK: cant get last inserted ID so cant return last inserted room record
 	return nil
 }
@@ -115,24 +116,18 @@ func (dbr *DBResource) GetRoomByID(roomID int64) (model.Room, error) {
 			room_id = $1
 	`
 
-	rooms, err := dbr.db.Queryx(query, roomID)
-
 	var r RoomDB
-	rooms.StructScan(&r)
-
-	if rooms.Next() {
-		err = rooms.StructScan(&r)
-
-		if err == nil {
-			return model.Room{
-				RoomID:      r.RoomID.Int64,
-				AdminUserID: r.AdminUserID.Int64,
-				Description: r.Description.String,
-				CategoryID:  r.CategoryID.Int64,
-				CreatedAt:   r.CreatedAt,
-			},err
-		}
+	err := dbr.db.Get(&r, query, roomID)
+	if err != nil {
+		log.Println(err)
+		return model.Room{}, err
 	}
 
-	return model.Room{}, err
+	return model.Room{
+		RoomID:      r.RoomID.Int64,
+		AdminUserID: r.AdminUserID.Int64,
+		Description: r.Description.String,
+		CategoryID:  r.CategoryID.Int64,
+		CreatedAt:   r.CreatedAt,
+	}, err
 }
