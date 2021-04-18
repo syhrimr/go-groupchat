@@ -12,6 +12,8 @@ import (
 )
 
 func (dbr *RedisResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
+	return dbr.next.GetJoinedRoom(userID)
+
 	val, err := dbr.rdb.Get(context.Background(), fmt.Sprintf("roomJoined:%d", userID)).Result()
 	if err != nil {
 		rooms, err := dbr.next.GetJoinedRoom(userID)

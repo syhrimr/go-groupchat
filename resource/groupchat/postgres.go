@@ -11,6 +11,7 @@ func (dbr *DBResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
 	query := `
 		SELECT
 			r.room_id,
+			name,
 		    admin_user_id,
 		    description,
 		    category_id,
@@ -34,6 +35,7 @@ func (dbr *DBResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
 		if err == nil {
 			resultRooms = append(resultRooms, model.Room{
 				RoomID:      r.RoomID.Int64,
+				Name:        r.Name.String,
 				AdminUserID: r.AdminUserID.Int64,
 				Description: r.Description.String,
 				CategoryID:  r.CategoryID.Int64,
@@ -106,6 +108,7 @@ func (dbr *DBResource) GetRoomByID(roomID int64) (model.Room, error) {
 	query := `
 		SELECT
 			room_id,
+			name,
 		    admin_user_id,
 		    description,
 		    category_id,
@@ -125,6 +128,7 @@ func (dbr *DBResource) GetRoomByID(roomID int64) (model.Room, error) {
 
 	return model.Room{
 		RoomID:      r.RoomID.Int64,
+		Name:        r.Name.String,
 		AdminUserID: r.AdminUserID.Int64,
 		Description: r.Description.String,
 		CategoryID:  r.CategoryID.Int64,
