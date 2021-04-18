@@ -33,3 +33,7 @@ func (u UseCase) JoinRoom(roomID, userID int64) error {
 func (u UseCase) GetRoomByID(roomID int64) (model.Room, error) {
 	return u.dbRoomRsc.GetRoomByID(roomID)
 }
+
+func (u UseCase) GetRoomList(userID int64) ([]model.Room, error) {
+	return u.dbRoomRsc.GetRooms(userID)
+}

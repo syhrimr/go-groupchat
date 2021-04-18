@@ -68,6 +68,7 @@ func main() {
 	// untuk PR
 	r.PUT("/groupchat", validateSession(joinRoom))
 	r.POST("/groupchat", validateSession(createRoom))
+	r.GET("/groupchat", validateSession(getRoomList))
 	r.GET("/joined", validateSession(getJoinedRoom))
 	r.GET("/groupchat/:room_id", getGroupchat)
 	r.Run()
@@ -186,6 +187,25 @@ func getJoinedRoom(c *gin.Context) {
 	userID := c.GetInt64("uid")
 	log.Println(userID)
 	rooms, err := dbRoomResource.GetJoinedRoom(userID)
+	log.Println(rooms)
+
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: rooms,
+	})
+}
+
+func getRoomList(c *gin.Context) {
+	userID := c.GetInt64("uid")
+	log.Println(userID)
+	rooms, err := groupChatUsecase.GetRoomList(userID)
 	log.Println(rooms)
 
 	if err != nil {
