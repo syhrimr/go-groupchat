@@ -135,3 +135,47 @@ func (dbr *DBResource) GetRoomByID(roomID int64) (model.Room, error) {
 		CreatedAt:   r.CreatedAt,
 	}, err
 }
+
+func (dbr *DBResource) GetRooms(userID int64) ([]model.Room, error) {
+	query := `
+		SELECT
+			r.room_id,
+			r."name",
+			r.description 
+		FROM room r 
+		EXCEPT
+		SELECT
+			r.room_id,
+		 	r.name,
+		 	r.description
+		FROM
+			room r
+		INNER JOIN
+			room_participant rp
+		ON 	r.room_id = rp.room_id
+		WHERE
+			rp.user_id = $1
+	`
+
+	rooms, err := dbr.db.Queryx(query, userID)
+
+	var resultRooms []model.Room
+	for rooms.Next() {
+		var r RoomDB
+		err = rooms.StructScan(&r)
+
+		if err == nil {
+			resultRooms = append(resultRooms, model.Room{
+				RoomID:      r.RoomID.Int64,
+				Name:        r.Name.String,
+				AdminUserID: r.AdminUserID.Int64,
+				Description: r.Description.String,
+				CategoryID:  r.CategoryID.Int64,
+				CreatedAt:   r.CreatedAt,
+			})
+		}
+	}
+	log.Println(resultRooms)
+
+	return resultRooms, err
+}

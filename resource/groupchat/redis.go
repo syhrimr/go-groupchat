@@ -59,3 +59,7 @@ func (dbr *RedisResource) AddRoomParticipant(roomID, userID int64) error {
 func (dbr *RedisResource) GetRoomByID(roomID int64) (model.Room, error) {
 	return dbr.next.GetRoomByID(roomID)
 }
+
+func (dbr *RedisResource) GetRooms(userID int64) ([]model.Room, error) {
+	return dbr.next.GetRooms(userID)
+}
