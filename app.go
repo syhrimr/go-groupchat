@@ -21,7 +21,6 @@ import (
 	redigo "github.com/gomodule/redigo/redis"
 )
 
-var db *sqlx.DB
 var dbRoomResource groupchat.DBItf
 var userClient userAuth.ClientItf
 var groupChatUsecase groupchat2.UsecaseItf
@@ -42,7 +41,6 @@ func main() {
 	dbRoomRsc := groupchat.NewRedisResource(rdb, groupchat.NewDBResource(dbInit))
 
 	dbRoomResource = dbRoomRsc
-	db = dbInit
 
 	userClient = userauth.NewClient("http://localhost:7070", time.Duration(30)*time.Second)
 	groupChatUsecase = groupchat2.NewUseCase(dbRoomRsc)
@@ -134,10 +132,14 @@ func createRoom(c *gin.Context) {
 	categoryId := c.Request.FormValue("category_id")
 	adminId := c.GetInt64("uid") //by default the one who create will be group admin
 
-	adminStr := strconv.FormatInt(adminId, 10)
+	catID, err := strconv.ParseInt(categoryId, 10, 64)
+	if err != nil {
+		catID = 0
+	}
 
-	_, err := groupChatUsecase.CreateGroupchat(name, adminStr, desc, categoryId)
-
+	//_, err = groupChatUsecase.CreateGroupchat(name, adminId, desc, catID)
+	log.Println(name, desc, categoryId, adminId, catID)
+	err = nil
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
@@ -222,6 +224,7 @@ func getRoomList(c *gin.Context) {
 	})
 }
 
+<<<<<<< HEAD
 func leaveRoom(c *gin.Context) {
 	userID := c.GetInt64("uid")
 	roomIDStr := c.Param("room_id")
@@ -248,6 +251,8 @@ func leaveRoom(c *gin.Context) {
 	})
 }
 
+=======
+>>>>>>> ce4d1b61a1a0b0a0c256d047b7aaea7a6a1e004d
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func RandStringBytes(n int) string {

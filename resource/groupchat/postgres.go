@@ -48,7 +48,7 @@ func (dbr *DBResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
 	return resultRooms, err
 }
 
-func (dbr *DBResource) CreateRoom(roomName string, adminID int64, description string, categoryID string) error {
+func (dbr *DBResource) CreateRoom(roomName string, adminID int64, description string, categoryID int64) error {
 	query := `
 		INSERT INTO
 			room
@@ -179,6 +179,7 @@ func (dbr *DBResource) GetRooms(userID int64) ([]model.Room, error) {
 
 	return resultRooms, err
 }
+<<<<<<< HEAD
 
 func (dbr *DBResource) LeaveRoom(roomID, userID int64) error {
 	query := `
@@ -196,3 +197,5 @@ func (dbr *DBResource) LeaveRoom(roomID, userID int64) error {
 	
 	return nil
 }
+=======
+>>>>>>> ce4d1b61a1a0b0a0c256d047b7aaea7a6a1e004d

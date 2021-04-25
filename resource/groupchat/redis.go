@@ -38,7 +38,7 @@ func (dbr *RedisResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
 	return rooms, nil
 }
 
-func (dbr *RedisResource) CreateRoom(roomName string, adminID int64, description string, categoryID string) error {
+func (dbr *RedisResource) CreateRoom(roomName string, adminID int64, description string, categoryID int64) error {
 	//no need redis for DML (insert)
 	return dbr.next.CreateRoom(roomName, adminID, description, categoryID)
 }
@@ -63,7 +63,10 @@ func (dbr *RedisResource) GetRoomByID(roomID int64) (model.Room, error) {
 func (dbr *RedisResource) GetRooms(userID int64) ([]model.Room, error) {
 	return dbr.next.GetRooms(userID)
 }
+<<<<<<< HEAD
 
 func (dbr *RedisResource) LeaveRoom(roomID, userID int64) error {
 	return dbr.next.LeaveRoom(roomID, userID)
 }
+=======
+>>>>>>> ce4d1b61a1a0b0a0c256d047b7aaea7a6a1e004d
