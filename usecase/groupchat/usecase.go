@@ -1,22 +1,22 @@
 package groupchat
 
 import (
-	"log"
-	"strconv"
-
 	"github.com/lolmourne/go-groupchat/model"
 )
 
-func (u UseCase) CreateGroupchat(name, adminID, desc, categoryID string) (model.Room, error) {
-	//Room set to always return nil since unable to get lastInsertId
-	admin, err := strconv.ParseInt(adminID, 10, 64)
+func (u UseCase) CreateGroupchat(name string, adminID int64, desc string, categoryID int64) (model.Room, error) {
+
+	err := u.dbRoomRsc.CreateRoom(name, adminID, desc, categoryID)
 	if err != nil {
-		log.Println(err)
 		return model.Room{}, err
 	}
 
-	room := u.dbRoomRsc.CreateRoom(name, admin, desc, categoryID)
-	return model.Room{}, room
+	return model.Room{
+		Name:        name,
+		AdminUserID: adminID,
+		Description: desc,
+		CategoryID:  categoryID,
+	}, nil
 
 }
 
@@ -36,4 +36,8 @@ func (u UseCase) GetRoomByID(roomID int64) (model.Room, error) {
 
 func (u UseCase) GetRoomList(userID int64) ([]model.Room, error) {
 	return u.dbRoomRsc.GetRooms(userID)
+}
+
+func multiply(x, y int64) int64 {
+	return x * y
 }

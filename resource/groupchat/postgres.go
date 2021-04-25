@@ -48,7 +48,7 @@ func (dbr *DBResource) GetJoinedRoom(userID int64) ([]model.Room, error) {
 	return resultRooms, err
 }
 
-func (dbr *DBResource) CreateRoom(roomName string, adminID int64, description string, categoryID string) error {
+func (dbr *DBResource) CreateRoom(roomName string, adminID int64, description string, categoryID int64) error {
 	query := `
 		INSERT INTO
 			room
