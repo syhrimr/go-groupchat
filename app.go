@@ -68,8 +68,10 @@ func main() {
 	// untuk PR
 	r.PUT("/groupchat", validateSession(joinRoom))
 	r.POST("/groupchat", validateSession(createRoom))
+	r.GET("/groupchat", validateSession(getRoomList))
 	r.GET("/joined", validateSession(getJoinedRoom))
 	r.GET("/groupchat/:room_id", getGroupchat)
+	r.PUT("/groupchat/:room_id", validateSession(leaveRoom))
 	r.Run()
 }
 
@@ -198,6 +200,51 @@ func getJoinedRoom(c *gin.Context) {
 	c.JSON(200, StandardAPIResponse{
 		Err:  "null",
 		Data: rooms,
+	})
+}
+
+func getRoomList(c *gin.Context) {
+	userID := c.GetInt64("uid")
+	log.Println(userID)
+	rooms, err := groupChatUsecase.GetRoomList(userID)
+	log.Println(rooms)
+
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: rooms,
+	})
+}
+
+func leaveRoom(c *gin.Context) {
+	userID := c.GetInt64("uid")
+	roomIDStr := c.Param("room_id")
+
+	roomID, err := strconv.ParseInt(roomIDStr, 10, 64)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	err = groupChatUsecase.LeaveRoom(roomID, userID)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(201, StandardAPIResponse{
+		Err:     "null",
+		Message: "Success leave room " + roomIDStr,
 	})
 }
 
