@@ -13,3 +13,8 @@ type RoomDB struct {
 	CategoryID  sql.NullInt64  `db:"category_id"`
 	CreatedAt   time.Time      `db:"created_at"`
 }
+
+type CategoryDB struct {
+	CategoryID sql.NullInt64  `db:"room_category_id"`
+	Name       sql.NullString `db:"name"`
+}

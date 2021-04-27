@@ -38,10 +38,6 @@ func (u UseCase) GetRoomList(userID int64) ([]model.Room, error) {
 	return u.dbRoomRsc.GetRooms(userID)
 }
 
-func (u UseCase) LeaveRoom(roomID, userID int64) error {
-	return u.dbRoomRsc.LeaveRoom(roomID, userID)
-}
-
-func multiply(x, y int64) int64 {
-	return x * y
+func (u UseCase) GetRoomByCategoryID(userID, categoryID int64) ([]model.Room, error) {
+	return u.dbRoomRsc.GetRoomByCategoryID(userID, categoryID)
 }

@@ -69,7 +69,9 @@ func main() {
 	r.GET("/groupchat", validateSession(getRoomList))
 	r.GET("/joined", validateSession(getJoinedRoom))
 	r.GET("/groupchat/:room_id", getGroupchat)
-	r.PUT("/groupchat/:room_id", validateSession(leaveRoom))
+	r.GET("/explore/:category_id", validateSession(getRoomByCategory))
+	r.GET("/explore", getCategory)
+	// r.PUT("/groupchat/:room_id", validateSession(leaveRoom))
 	r.Run()
 }
 
@@ -224,35 +226,46 @@ func getRoomList(c *gin.Context) {
 	})
 }
 
-<<<<<<< HEAD
-func leaveRoom(c *gin.Context) {
+func getRoomByCategory(c *gin.Context) {
 	userID := c.GetInt64("uid")
-	roomIDStr := c.Param("room_id")
-
-	roomID, err := strconv.ParseInt(roomIDStr, 10, 64)
+	catIDStr := c.Param("category_id")
+	catID, err := strconv.ParseInt(catIDStr, 10, 64)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
+			Err: "Unauthorized",
 		})
 		return
 	}
 
-	err = groupChatUsecase.LeaveRoom(roomID, userID)
+	rooms, err := groupChatUsecase.GetRoomByCategoryID(userID, catID)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
-			Err: err.Error(),
+			Err: "Unauthorized",
 		})
 		return
 	}
 
-	c.JSON(201, StandardAPIResponse{
-		Err:     "null",
-		Message: "Success leave room " + roomIDStr,
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: rooms,
 	})
 }
 
-=======
->>>>>>> ce4d1b61a1a0b0a0c256d047b7aaea7a6a1e004d
+func getCategory(c *gin.Context) {
+	categories, err := dbRoomResource.GetCategory()
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: categories,
+	})
+}
+
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func RandStringBytes(n int) string {

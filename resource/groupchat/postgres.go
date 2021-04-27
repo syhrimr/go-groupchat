@@ -179,23 +179,69 @@ func (dbr *DBResource) GetRooms(userID int64) ([]model.Room, error) {
 
 	return resultRooms, err
 }
-<<<<<<< HEAD
 
-func (dbr *DBResource) LeaveRoom(roomID, userID int64) error {
+func (dbr *DBResource) GetRoomByCategoryID(userID, categoryID int64) ([]model.Room, error) {
 	query := `
-		DELETE FROM
-			room_participant
+		SELECT
+			room_id,
+			name,
+			admin_user_id,
+			description,
+			category_id,
+			created_at
+		FROM
+			room
 		WHERE
-			room_id = $1 AND
-			user_id = $2
+			category_id = $1
 	`
-	
-	_, err := dbr.db.Exec(query, roomID, userID)
-	if err != nil {
-		return err
+
+	rooms, err := dbr.db.Queryx(query, categoryID)
+
+	var resultRooms []model.Room
+	for rooms.Next() {
+		var r RoomDB
+		err = rooms.StructScan(&r)
+
+		if err == nil {
+			resultRooms = append(resultRooms, model.Room{
+				RoomID:      r.RoomID.Int64,
+				Name:        r.Name.String,
+				AdminUserID: r.AdminUserID.Int64,
+				Description: r.Description.String,
+				CategoryID:  r.CategoryID.Int64,
+				CreatedAt:   r.CreatedAt,
+			})
+		}
 	}
-	
-	return nil
+	log.Println(resultRooms)
+
+	return resultRooms, err
 }
-=======
->>>>>>> ce4d1b61a1a0b0a0c256d047b7aaea7a6a1e004d
+
+func (dbr *DBResource) GetCategory() ([]model.Category, error) {
+	query := `
+		SELECT
+			room_category_id,
+			name
+		FROM
+			room_category
+	`
+
+	categories, err := dbr.db.Queryx(query)
+
+	var resultCategories []model.Category
+	for categories.Next() {
+		var c CategoryDB
+		err = categories.StructScan(&c)
+
+		if err == nil {
+			resultCategories = append(resultCategories, model.Category{
+				CategoryID: c.CategoryID.Int64,
+				Name:       c.Name.String,
+			})
+		}
+	}
+	log.Println(resultCategories)
+
+	return resultCategories, err
+}
