@@ -71,3 +71,11 @@ func (dbr *RedisResource) GetRoomByCategoryID(userID, categoryID int64) ([]model
 func (dbr *RedisResource) GetCategory() ([]model.Category, error) {
 	return dbr.next.GetCategory()
 }
+
+func (dbr *RedisResource) GetRoomParticipants(roomID int64) ([]model.User, error) {
+	return dbr.next.GetRoomParticipants(roomID)
+}
+
+func (dbr *RedisResource) LeaveRoom(userID, roomID int64) error {
+	return dbr.next.LeaveRoom(userID, roomID)
+}

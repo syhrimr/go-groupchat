@@ -14,6 +14,12 @@ type RoomDB struct {
 	CreatedAt   time.Time      `db:"created_at"`
 }
 
+type UserDB struct {
+	UserID     sql.NullInt64  `db:"user_id"`
+	UserName   sql.NullString `db:"username"`
+}
+
+
 type CategoryDB struct {
 	CategoryID sql.NullInt64  `db:"room_category_id"`
 	Name       sql.NullString `db:"name"`

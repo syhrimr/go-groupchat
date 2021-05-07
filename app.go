@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"math/rand"
 	"strconv"
 	"time"
 
@@ -71,7 +70,8 @@ func main() {
 	r.GET("/groupchat/:room_id", getGroupchat)
 	r.GET("/explore/:category_id", validateSession(getRoomByCategory))
 	r.GET("/explore", getCategory)
-	// r.PUT("/groupchat/:room_id", validateSession(leaveRoom))
+	r.GET("/participants/:room_id", getRoomParticipants)
+	r.PUT("/groupchat/:room_id", validateSession(leaveRoom))
 	r.Run()
 }
 
@@ -139,9 +139,7 @@ func createRoom(c *gin.Context) {
 		catID = 0
 	}
 
-	//_, err = groupChatUsecase.CreateGroupchat(name, adminId, desc, catID)
-	log.Println(name, desc, categoryId, adminId, catID)
-	err = nil
+	_, err = groupChatUsecase.CreateGroupchat(name, adminId, desc, catID)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: err.Error(),
@@ -266,14 +264,53 @@ func getCategory(c *gin.Context) {
 	})
 }
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+func getRoomParticipants(c *gin.Context) {
+	roomIDStr := c.Param("room_id")
+	roomID, err := strconv.ParseInt(roomIDStr, 10, 64)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "wrong room id",
+		})
+		return
 	}
-	return string(b)
+
+	participants, err := dbRoomResource.GetRoomParticipants(roomID)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:  "null",
+		Data: participants,
+	})
+}
+
+func leaveRoom(c *gin.Context) {
+	userID := c.GetInt64("uid")
+	roomIDStr := c.Param("room_id")
+	roomID, err := strconv.ParseInt(roomIDStr, 10, 64)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	err = dbRoomResource.LeaveRoom(userID, roomID)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:     "null",
+		Message: "Success leave group chat with ID " + roomIDStr,
+	})
 }
 
 type StandardAPIResponse struct {

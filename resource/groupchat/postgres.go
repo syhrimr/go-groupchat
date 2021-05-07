@@ -144,17 +144,18 @@ func (dbr *DBResource) GetRooms(userID int64) ([]model.Room, error) {
 			r.description 
 		FROM room r 
 		EXCEPT
-		SELECT
-			r.room_id,
-		 	r.name,
-		 	r.description
-		FROM
-			room r
-		INNER JOIN
-			room_participant rp
-		ON 	r.room_id = rp.room_id
-		WHERE
-			rp.user_id = $1
+			SELECT
+				r.room_id,
+				r.name,
+				r.description
+			FROM
+				room r
+			INNER JOIN
+				room_participant rp
+			ON 
+				r.room_id = rp.room_id
+			WHERE
+				rp.user_id = $1
 	`
 
 	rooms, err := dbr.db.Queryx(query, userID)
@@ -183,17 +184,27 @@ func (dbr *DBResource) GetRooms(userID int64) ([]model.Room, error) {
 func (dbr *DBResource) GetRoomByCategoryID(userID, categoryID int64) ([]model.Room, error) {
 	query := `
 		SELECT
-			room_id,
-			name,
-			admin_user_id,
-			description,
-			category_id,
-			created_at
+			r.room_id,
+			r.name,
+			r.description
 		FROM
-			room
+			room r
 		WHERE
-			category_id = $1
-	`
+			r.category_id = $1
+		EXCEPT
+			SELECT
+				r.room_id,
+				r.name,
+				r.description
+			FROM
+				room r
+			INNER JOIN
+				room_participant rp
+			ON 
+				r.room_id = rp.room_id
+			WHERE
+				rp.user_id = $1
+		`
 
 	rooms, err := dbr.db.Queryx(query, categoryID)
 
@@ -225,7 +236,7 @@ func (dbr *DBResource) GetCategory() ([]model.Category, error) {
 			name
 		FROM
 			room_category
-	`
+		`
 
 	categories, err := dbr.db.Queryx(query)
 
@@ -244,4 +255,54 @@ func (dbr *DBResource) GetCategory() ([]model.Category, error) {
 	log.Println(resultCategories)
 
 	return resultCategories, err
+}
+
+func (dbr *DBResource) GetRoomParticipants(roomID int64) ([]model.User, error) {
+	query := `
+		SELECT
+			a.username
+		FROM
+			account a 
+		INNER JOIN
+			room_participant rp
+		ON
+			a.user_id = rp.user_id
+		WHERE
+			rp.room_id = $1
+	`
+
+	participants, err := dbr.db.Queryx(query, roomID)
+	var resultParticipants []model.User
+	for participants.Next() {
+		var userDB UserDB
+		err = participants.StructScan(&userDB)
+
+		if err == nil {
+			resultParticipants = append(resultParticipants, model.User{
+				UserID:   userDB.UserID.Int64,
+				Username: userDB.UserName.String,
+			})
+		}
+	}
+
+	return resultParticipants, err
+}
+
+func (dbr *DBResource) LeaveRoom(userID, roomID int64) error {
+	query := `
+		DELETE 
+		FROM
+			room_participant
+		WHERE
+			user_id = $1
+		AND
+			room_id = $2
+		`
+
+	_, err := dbr.db.Exec(query, userID, roomID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
