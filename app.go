@@ -72,6 +72,7 @@ func main() {
 	r.GET("/explore", getCategory)
 	r.GET("/participants/:room_id", getRoomParticipants)
 	r.PUT("/groupchat/:room_id", validateSession(leaveRoom))
+	r.PUT("/groupchat/leave/:room_id", validateSession(deleteRoom))
 	r.Run()
 }
 
@@ -300,6 +301,31 @@ func leaveRoom(c *gin.Context) {
 	}
 
 	err = dbRoomResource.LeaveRoom(userID, roomID)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	c.JSON(200, StandardAPIResponse{
+		Err:     "null",
+		Message: "Success leave group chat with ID " + roomIDStr,
+	})
+}
+
+func deleteRoom(c *gin.Context) {
+	userID := c.GetInt64("uid")
+	roomIDStr := c.Param("room_id")
+	roomID, err := strconv.ParseInt(roomIDStr, 10, 64)
+	if err != nil {
+		c.JSON(400, StandardAPIResponse{
+			Err: "Unauthorized",
+		})
+		return
+	}
+
+	err = groupChatUsecase.DeleteRoom(userID, roomID)
 	if err != nil {
 		c.JSON(400, StandardAPIResponse{
 			Err: "Unauthorized",

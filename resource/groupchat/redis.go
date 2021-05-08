@@ -79,3 +79,7 @@ func (dbr *RedisResource) GetRoomParticipants(roomID int64) ([]model.User, error
 func (dbr *RedisResource) LeaveRoom(userID, roomID int64) error {
 	return dbr.next.LeaveRoom(userID, roomID)
 }
+
+func (dbr *RedisResource) DeleteRoom(roomID int64) error {
+	return dbr.next.DeleteRoom(roomID)
+}

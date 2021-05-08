@@ -25,6 +25,7 @@ type DBItf interface {
 	GetCategory() ([]model.Category, error)
 	GetRoomParticipants(roomID int64) ([]model.User, error)
 	LeaveRoom(userID, roomID int64) error
+	DeleteRoom(roomID int64) error
 }
 
 func NewRedisResource(rdb *redis.Client, next DBItf) DBItf {
